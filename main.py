@@ -20,14 +20,17 @@ logging.basicConfig(filename="output.log", encoding="utf-8", level=logging.DEBUG
 
 load_dotenv()
 
-HONEYPOT_IPS = ["144.202.123.131", "3.19.252.184"]
+HONEYPOT_IPS = {
+        "172.31.30.249": None,
+        "3.19.252.184": "172.31.30.249"
+}
 session = requests_cache.CachedSession("abuseIPDB_cache", expire_after=timedelta(days=1))
 
 def ping_honeypots(username, password):
     if not username or not password:
         raise Exception("Username and password are required!")
     cnx = mysql.connector.connect(user=username, password=password, host="127.0.0.1", database="mysql")
-    for honeypot in HONEYPOT_IPS:
+    for honeypot, private_ip in HONEYPOT_IPS.items():
         ymd_date = datetime.now().strftime("%Y-%m-%d")
         logging.info(f"Pinging {honeypot} data for {ymd_date}")
         subprocess.run(["rsync", "-azv", f"root@{honeypot}:/root/honeypot/data", f"/home/ubuntu/honeypot_tracker/data/{honeypot}/"])
@@ -63,7 +66,7 @@ def ping_honeypots(username, password):
                     pass
 
 
-                if packet.time > (datetime.now() + timedelta(minutes=-10)).timestamp() and src_ip != honeypot:
+                if packet.time > (datetime.now() + timedelta(minutes=-10)).timestamp() and ((private_ip is None and src_ip != honeypot) or (private_ip is not None and src_ip != private_ip):
                     abuseipdb_data = get_ip_data(src_ip)
                     region = None
                     abuse_confidence_score = None
