@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import mysql.connector
 import requests
+import requests_cache
 from requests.exceptions import HTTPError
 from dotenv import load_dotenv
 from scapy.all import *
@@ -19,7 +20,8 @@ logging.basicConfig(filename="output.log", encoding="utf-8", level=logging.DEBUG
 
 load_dotenv()
 
-HONEYPOT_IPS = ["144.202.123.131"]
+HONEYPOT_IPS = ["144.202.123.131", "3.19.252.184"]
+session = requests_cache.CachedSession("abuseIPDB_cache", expire_after=timedelta(days=1))
 
 def ping_honeypots(username, password):
     if not username or not password:
@@ -45,12 +47,6 @@ def ping_honeypots(username, password):
                 src_port = packet["TCP"].sport
                 tcp_flag = str(packet["TCP"].flags)
                 payload = bytes(packet["TCP"].payload)
-                abuseipdb_data = get_ip_data(src_ip)
-                region = None
-                abuse_confidence_score = None
-                if abuseipdb_data is not None:
-                    region = abuseipdb_data["data"]["countryCode"]
-                    abuse_confidence_score = abuseipdb_data["data"]["abuseConfidenceScore"]
 
                 header_exists = False
                 try:
@@ -68,6 +64,12 @@ def ping_honeypots(username, password):
 
 
                 if packet.time > (datetime.now() + timedelta(minutes=-10)).timestamp() and src_ip != honeypot:
+                    abuseipdb_data = get_ip_data(src_ip)
+                    region = None
+                    abuse_confidence_score = None
+                    if abuseipdb_data is not None:
+                        region = abuseipdb_data["data"]["countryCode"]
+                        abuse_confidence_score = abuseipdb_data["data"]["abuseConfidenceScore"]
                     cursor = cnx.cursor()
                     insert = ("INSERT INTO attacker_ips (ip, date, target_ip, src_port, tcp_flag, raw_data, abuse_confidence_score, region) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)")
                     data = (src_ip, timestamp, honeypot, src_port, tcp_flag, payload, abuse_confidence_score, region)
@@ -78,11 +80,11 @@ def ping_honeypots(username, password):
                     logging.info(f"Discovered {src_ip} on port {src_port} at {timestamp}")
 
         logging.info(f"Output for honeypot {honeypot} written to {honeypot}.pcap")
-        cnx.close()
+    cnx.close()
 
 def get_ip_data(ip):
     try:
-        response = requests.get(f"https://api.abuseipdb.com/api/v2/check?ipAddress={quote(ip)}", headers={
+        response = session.get(f"https://api.abuseipdb.com/api/v2/check?ipAddress={quote(ip)}", headers={
             "Key": os.getenv("ABUSEIPDB_API_KEY")
         })
         response_json = response.json()
@@ -93,7 +95,8 @@ def get_ip_data(ip):
             raise HTTPError()
         return response_json
 
-    except HTTPError:
+    except HTTPError as e:
+        logging.warning(f"HTTPError occurred when querying AbuseIPDB: {e}")
         return None
 
 
