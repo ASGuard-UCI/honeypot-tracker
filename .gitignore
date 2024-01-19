@@ -5,3 +5,5 @@ data/
 output.log
 
 abuseIPDB_cache.sqlite
+
+__pycache__
