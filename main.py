@@ -83,7 +83,7 @@ def ping_honeypots(username, password):
     connection = mysql.connector.pooling.MySQLConnectionPool(pool_size=32, user=username, password=password, host="127.0.0.1", database="mysql")
     connection2 = mysql.connector.pooling.MySQLConnectionPool(pool_size=32, user=username, password=password, host="127.0.0.1", database="mysql")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(HONEYPOT_IPS)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
         for honeypot, private_ip in HONEYPOT_IPS.items():
             futures.append(executor.submit(_process_honeypot, honeypot=honeypot, private_ip=private_ip, connections=[connection, connection2], now=now))
